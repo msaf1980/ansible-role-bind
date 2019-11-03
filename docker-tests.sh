@@ -76,10 +76,10 @@ main() {
 configure_environment() {
 
   case "${DISTRIBUTION}_${VERSION}" in
-    centos_6)
+    centos_6|oraclelinux_6)
       run_opts+=('--volume=/sys/fs/cgroup:/sys/fs/cgroup:ro')
       ;;
-    centos_7|fedora_*)
+    centos_7|centos_8|oraclelinux_7|oraclelinux_8|fedora_*)
       init=/usr/lib/systemd/systemd
       run_opts+=('--volume=/sys/fs/cgroup:/sys/fs/cgroup:ro')
       ;;

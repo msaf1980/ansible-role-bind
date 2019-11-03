@@ -43,7 +43,7 @@ readonly container_id="$(mktemp)"
 readonly role_dir='/etc/ansible/roles/role_under_test'
 readonly test_playbook="${role_dir}/docker-tests/test.yml"
 
-readonly docker_image="bertvv/ansible-testing"
+readonly docker_image="msaf1980/ansible-testing"
 readonly image_tag="${docker_image}:${DISTRIBUTION}_${VERSION}"
 
 # Distribution specific settings

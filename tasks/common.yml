@@ -5,8 +5,8 @@
 - name: Common | Configure BIND options to disable IPv6 (common)
   template:
     src: "{{ bind_options_template }}"
-    dest: "{{ bind_options }}" 
-    owner: root    
+    dest: "{{ bind_options }}"
+    owner: root
     group: root
     mode: '0644'
     setype: named_conf_t

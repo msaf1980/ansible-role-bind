@@ -1,0 +1,254 @@
+#! /usr/bin/env bash
+#
+# Author: Bert Van Vreckem <bert.vanvreckem@gmail.com>
+#
+# Usage: DISTRIBUTION=<distro> VERSION=<version> ./docker-tests.sh
+#
+# Creates a Docker container for the specified Linux distribution and version,
+# available at https://hub.docker.com/r/bertvv/ansible-testing/; runs a syntax
+# check; applies this role to the container using a test playbook; and,
+# finally, runs an idempotence test.
+#
+# Environment variables DISTRIBUTION and VERSION must be set outside of the
+# script.
+#
+# EXAMPLES
+#
+# $ DISTRIBUTION=centos VERSION=7 ROLE=squid ./tests/docker-tests.sh
+# $ DISTRIBUTION=debian VERSION=9 ROLE=squid ./tests/docker-tests.sh
+# $ DISTRIBUTION=ubuntu VERSION=18.04 ROLE=squid ./tests/docker-tests.sh
+# $ DISTRIBUTION=ubuntu VERSION=18.04 ROLE=bind ./tests/docker-tests.sh
+#
+
+####################################################################
+# Call sequence
+
+# Set DISTRIBUTION, VERSION and ROLE env vars
+# Example:
+# DISTRIBUTION=ubuntu
+# VERSION=18.04
+# ROLE=squid
+# If needed, set DOCKER_ENV variable, it will be passed to commands. runned over exec_container
+# DOCKER_ENV="MASTER_IP=192.168.0.10"
+
+# start_container
+
+# run_syntax_check "${container_id}" "${role_dir}/${test_playbook}"
+# run_test_playbook "${container_id}" "${role_dir}/${test_playbook}"
+# run_idempotence_test "${container_id}" "${role_dir}/${test_playbook}"
+
+########################
+# run functional tests #
+########################
+
+# cleanup_container "${container_id}"
+
+####################################################################
+
+####################################################################
+# Workarounds for some bugs
+if [ -f /etc/redhat-release ]; then
+    major_version=$( rpm -E %{rhel} )
+
+    # Bug in docker hosts OS overlayfs
+    # Rpmdb checksum is invalid: dCDPT(pkg checksums):
+    # https://stackoverflow.com/questions/51287437/docker-image-build-getting-check-sum-error-rpmdb-checksum-is-invalid-dcdpt
+    [ "${major_version}" == "7" -o "${major_version}" == "6" ] && {
+       yum clean all
+       yum install -y yum-plugin-ovl
+    }
+fi
+
+###################################################################
+
+
+# Bash settings
+# abort on nonzero exitstatus
+set -o errexit
+# abort on unbound variable
+set -o nounset
+# don't hide errors within pipes
+set -o pipefail
+#}}}
+#{{{ Variables
+IFS=$'\t\n'   # Split on newlines and tabs (but not on spaces)
+
+# Color definitions
+readonly reset='\e[0m'
+readonly red='\e[0;31m'
+readonly yellow='\e[0;33m'
+
+# Test environment
+id=""
+id_file=""
+
+roles_dir='/etc/ansible/roles/role_under_test'
+role_dir="${roles_dir}/${ROLE}"
+test_playbook="tests/test.yml"
+
+readonly docker_image="msaf1980/ansible-testing"
+readonly image_tag="${docker_image}:${DISTRIBUTION}_${VERSION}"
+
+# Distribution specific settings
+init="/sbin/init"
+run_opts=("--privileged")
+
+
+# Helper functions
+
+# This function defines run options for Docker, depending on the
+# Linux $DISTRIBUTION and $VERSION.
+configure_environment() {
+  case "${DISTRIBUTION}_${VERSION}" in
+    centos_6|oraclelinux_6)
+      run_opts+=('--volume=/sys/fs/cgroup:/sys/fs/cgroup:ro')
+      ;;
+    centos_7|centos_8|oraclelinux_7|oraclelinux_8|fedora_*)
+      init=/usr/lib/systemd/systemd
+      if [ -x '/usr/sbin/getenforce' ]; then
+        run_opts+=('--volume=/sys/fs/selinux:/sys/fs/selinux:ro')
+      fi
+      run_opts+=('--volume=/sys/fs/cgroup:/sys/fs/cgroup:ro' '--cap-add=SYS_ADMIN' '--cap-add=SYS_RESOURCE')
+      ;;
+    ubuntu_14.04)
+      #run_opts+=('--volume=/sys/fs/cgroup:/sys/fs/cgroup:ro')
+      # Workaround for issue when the host operating system has SELinux
+      if [ -x '/usr/sbin/getenforce' ]; then
+        run_opts+=('--volume=/sys/fs/selinux:/sys/fs/selinux:ro')
+      fi
+      ;;
+    ubuntu_1[68].04|debian_*|arch_latest)
+      run_opts=('--volume=/run' '--volume=/run/lock' '--volume=/tmp' '--volume=/sys/fs/cgroup:/sys/fs/cgroup:ro' '--cap-add=SYS_ADMIN' '--cap-add=SYS_RESOURCE')
+
+      if [ -x '/usr/sbin/getenforce' ]; then
+        run_opts+=('--volume=/sys/fs/selinux:/sys/fs/selinux:ro')
+      fi
+      ;;
+    *)
+      warn "Warning: no run options added for ${DISTRIBUTION} ${VERSION}"
+      ;;
+  esac
+}
+
+# Usage: build_container
+build_container() {
+  log "Building container for ${DISTRIBUTION} ${VERSION}"
+  set -x
+  docker build --tag="${image_tag}" .
+  set +x
+}
+
+start_container() {
+  id_file="$(mktemp)"
+  log "Starting container (${id_file})"
+  set -x
+  docker run --detach \
+    "${run_opts[@]}" \
+    --volume="${PWD}:${roles_dir}/${ROLE}:ro" \
+    "${image_tag}" \
+    "${init}" \
+    > "${id_file}"
+  set +x
+  get_container_id "${id_file}" || return 1
+  exec_container "${id}" sh -c "printf '[defaults]\nroles_path=${roles_dir}/' > ansible.cfg"
+  return 0
+}
+
+get_container_id() {
+  # $1 container_id
+  [ -z "$1" ] && id="" || id="$( cat "${1}" )"
+  [ "$id" == "" ] && return 1 || return 0
+}
+
+# Usage: get_container_ip CONTAINER_ID
+#
+# Prints the IP address of the specified container.
+get_container_ip() {
+  # $1 container_id
+  [ -z "${1}" ] && return 1
+  docker inspect --format '{{ .NetworkSettings.IPAddress }}' "${1}"
+  return 0
+}
+
+# Usage: exec_container CONTAINER_ID COMMAND
+#
+# Run COMMAND on the Docker container
+exec_container() {
+  # $1 container_id
+  # $2 command ..
+  [ -z "${1}" ] && return 1
+  shift
+  set -x
+  docker exec --tty \
+    "${id}" \
+    env TERM=xterm ${DOCKER_ENV} \
+    "${@}"
+  set +x
+  return 0
+}
+
+run_syntax_check() {
+  # $1 container_id
+  # $2 test_playbook
+  log 'Running syntax check on playbook'
+  exec_container "${1}" ansible-playbook "${2}" --syntax-check
+  log 'Syntax check finished'
+}
+
+run_test_playbook() {
+  # $1 container_id
+  # $2 test_playbook
+  log 'Running playbook'
+  exec_container "${1}" ansible-playbook "${2}"
+  log 'Run finished'
+}
+
+run_idempotence_test() {
+  # $1 container_id
+  # $2 test_playbook
+  log 'Running idempotence test'
+  local output
+  output="$(mktemp)"
+
+  exec_container "${1}" ansible-playbook "${2}" 2>&1 | tee "${output}"
+
+  if grep -q 'changed=0.*failed=0' "${output}"; then
+    result='pass'
+    return_status=0
+  else
+    result='fail'
+    return_status=1
+  fi
+  rm "${output}"
+
+  log "Result: ${result}"
+  return "${return_status}"
+}
+
+cleanup_container() {
+  # $1 container_id
+  log 'Cleaning up'
+  get_container_id "${1}" && { \
+  set -x
+  docker stop "${id}"
+  docker rm "${id}"
+  rm "${1}"
+  set +x
+  }
+}
+
+# Usage: log [ARG]...
+#
+# Prints all arguments on the standard output stream
+log() {
+  printf "${yellow}>>> %s${reset}\\n" "${*}"
+}
+
+# Usage: warn [ARG]...
+#
+# Prints all arguments on the standard error stream
+warn() {
+  printf "${red}!!! %s${reset}\\n" "${*}" 1>&2
+}
+
+configure_environment

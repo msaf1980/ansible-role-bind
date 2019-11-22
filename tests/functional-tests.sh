@@ -17,7 +17,7 @@ test_dir="$( dirname "${BASH_SOURCE[0]}" )"
 
 bats_archive="v0.4.0.tar.gz"
 bats_url="https://github.com/sstephenson/bats/archive/${bats_archive}"
-bats_install_dir="/opt"
+bats_install_dir="${HOME}"
 bats_default_location="${bats_install_dir}/bats/libexec/bats"
 test_file_pattern="*.bats"
 

@@ -47,7 +47,7 @@ run_test_playbook ${main_id} ${role_dir}/tests/test.yml
 
 run_idempotence_test ${main_id} ${role_dir}/tests/test.yml
 
-exec_container ${main_id} SUT_IP="${main_ip}" ${role_dir}/tests/functional-tests.sh || exit 1
+SUT_IP="${main_ip}" ./tests/functional-tests.sh || exit 1
 
 
 log "starting SLAVE"
@@ -64,7 +64,7 @@ run_test_playbook ${slave_id} ${role_dir}/tests/test.yml
 
 run_idempotence_test ${slave_id} ${role_dir}/tests/test.yml
 
-exec_container ${slave_id} SUT_IP="${slave_ip}" ${role_dir}/tests/functional-tests.sh || exit 1
+SUT_IP="${slave_ip}" ./tests/functional-tests.sh || exit 1
 
 cleanup_container ${main_file}
 cleanup_container ${slave_file}

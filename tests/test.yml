@@ -117,4 +117,4 @@
               - 'some text'
               - 'more text'
   roles:
-    - msaf1980.bind
+    - role_under_test

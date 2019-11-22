@@ -14,10 +14,12 @@
 #
 # EXAMPLES
 #
-# $ DISTRIBUTION=centos VERSION=7 ROLE=msaf1980.squid ./tests/docker-tests.sh
-# $ DISTRIBUTION=debian VERSION=9 ROLE=msaf1980.squid ./tests/docker-tests.sh
-# $ DISTRIBUTION=ubuntu VERSION=18.04 ROLE=msaf1980.squid ./tests/docker-tests.sh
+# $ DISTRIBUTION=centos VERSION=7 ./tests/docker-tests.sh
+# $ DISTRIBUTION=debian VERSION=9 ./tests/docker-tests.sh
+# $ DISTRIBUTION=ubuntu VERSION=18.04 ./tests/docker-tests.sh
 #
+
+readonly ROLE="msaf1980.bind"
 
 [ -z "${1}" ] && opt="" || opt="${1}"
 
@@ -62,6 +64,7 @@ run_test_playbook ${slave_id} ${role_dir}/tests/test.yml
 
 run_idempotence_test ${slave_id} ${role_dir}/tests/test.yml
 
-exec_container ${slave_id} SUT_IP="${main_ip}" ${role_dir}/tests/functional-tests.sh || exit 1
+exec_container ${slave_id} SUT_IP="${slave_ip}" ${role_dir}/tests/functional-tests.sh || exit 1
 
+cleanup_container ${main_file}
 cleanup_container ${slave_file}

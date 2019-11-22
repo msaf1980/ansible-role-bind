@@ -31,4 +31,4 @@ before_install:
 
 script:
   - ./lint.sh
-  - ROLE=msaf1980.bind ./tests/docker-tests.sh
+  - ./tests/docker-tests.sh

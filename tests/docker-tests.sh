@@ -19,8 +19,6 @@
 # $ DISTRIBUTION=ubuntu VERSION=18.04 ./tests/docker-tests.sh
 #
 
-readonly ROLE="msaf1980.bind"
-
 [ -z "${1}" ] && opt="" || opt="${1}"
 
 readonly script_dir=$( dirname "${BASH_SOURCE[0]}" )

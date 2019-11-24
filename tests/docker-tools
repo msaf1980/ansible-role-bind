@@ -144,7 +144,7 @@ start_container() {
   set -x
   docker run --detach \
     "${run_opts[@]}" \
-    --volume="${PWD}:${roles_dir}/role_under_test:ro" \
+    --volume="${PWD}:${role_dir}:ro" \
     "${image_tag}" \
     "${init}" \
     > "${id_file}"
